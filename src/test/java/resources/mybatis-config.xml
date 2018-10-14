@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE configuration
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-config.dtd">
+<configuration>
+  <settings>
+    <setting name="mapUnderscoreToCamelCase" value="true" />
+  </settings>
+  <!--<plugins>
+  &lt;!&ndash;<plugin interceptor="com.github.pagehelper.PageInterceptor"></plugin>
+ &ndash;&gt; &lt;!&ndash;<plugin interceptor="mybatis.plugin.TestInterceptor">
+
+  </plugin>&ndash;&gt;
+  
+</plugins>-->
+  <environments default="development">
+    <environment id="development">
+      <transactionManager type="JDBC"/>
+      <dataSource type="POOLED">
+        <property name="driver" value="com.mysql.jdbc.Driver"/>
+        <property name="url" value="jdbc:mysql://39.107.13.126:3306/jeeweb"/>
+        <property name="username" value="jeeweb"/>
+        <property name="password" value="jeeweb"/>
+      </dataSource>
+    </environment>
+  </environments>
+  <mappers>
+    <package name="mybatis"></package>
+  </mappers>
+</configuration>

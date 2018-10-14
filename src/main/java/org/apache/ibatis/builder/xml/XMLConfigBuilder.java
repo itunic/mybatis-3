@@ -15,11 +15,6 @@
  */
 package org.apache.ibatis.builder.xml;
 
-import java.io.InputStream;
-import java.io.Reader;
-import java.util.Properties;
-import javax.sql.DataSource;
-
 import org.apache.ibatis.builder.BaseBuilder;
 import org.apache.ibatis.builder.BuilderException;
 import org.apache.ibatis.datasource.DataSourceFactory;
@@ -38,18 +33,23 @@ import org.apache.ibatis.reflection.MetaClass;
 import org.apache.ibatis.reflection.ReflectorFactory;
 import org.apache.ibatis.reflection.factory.ObjectFactory;
 import org.apache.ibatis.reflection.wrapper.ObjectWrapperFactory;
-import org.apache.ibatis.session.AutoMappingBehavior;
-import org.apache.ibatis.session.AutoMappingUnknownColumnBehavior;
-import org.apache.ibatis.session.Configuration;
-import org.apache.ibatis.session.ExecutorType;
-import org.apache.ibatis.session.LocalCacheScope;
+import org.apache.ibatis.session.*;
 import org.apache.ibatis.transaction.TransactionFactory;
 import org.apache.ibatis.type.JdbcType;
 import org.apache.ibatis.type.TypeHandler;
 
+import javax.sql.DataSource;
+import java.io.InputStream;
+import java.io.Reader;
+import java.util.Properties;
+
 /**
  * @author Clinton Begin
  * @author Kazuki Shimizu
+ */
+
+/**
+ * 负责专门构建、解析相关XML
  */
 public class XMLConfigBuilder extends BaseBuilder {
 
@@ -91,24 +91,40 @@ public class XMLConfigBuilder extends BaseBuilder {
     this.parser = parser;
   }
 
+  /**
+   * 解析XML
+   * @return
+   */
   public Configuration parse() {
+    //判断是否已解析
     if (parsed) {
       throw new BuilderException("Each XMLConfigBuilder can only be used once.");
     }
     parsed = true;
+    //解析mybatis-config.xml里面configuration配置
     parseConfiguration(parser.evalNode("/configuration"));
     return configuration;
   }
 
+    /**
+     * 解析mybatis-config.xml里面configuration配置
+     * @param root configuration
+     */
   private void parseConfiguration(XNode root) {
     try {
       //issue #117 read properties first
+        //解析 properties 标签
       propertiesElement(root.evalNode("properties"));
+      //解析 settings  标签
       Properties settings = settingsAsProperties(root.evalNode("settings"));
       loadCustomVfs(settings);
+      //解析typeAliases标签
       typeAliasesElement(root.evalNode("typeAliases"));
+      //解析 plugins标签
       pluginElement(root.evalNode("plugins"));
+      //解析 objectFactory 标签
       objectFactoryElement(root.evalNode("objectFactory"));
+      //解析 objectWrapperFactory 标签
       objectWrapperFactoryElement(root.evalNode("objectWrapperFactory"));
       reflectorFactoryElement(root.evalNode("reflectorFactory"));
       settingsElement(settings);
@@ -122,6 +138,14 @@ public class XMLConfigBuilder extends BaseBuilder {
     }
   }
 
+    /**
+     * 解析 settings 标签
+     *
+     * 这是 MyBatis 中极为重要的调整设置，
+     * 它们会改变 MyBatis 的运行时行为。
+     * @param context
+     * @return
+     */
   private Properties settingsAsProperties(XNode context) {
     if (context == null) {
       return new Properties();
@@ -151,13 +175,25 @@ public class XMLConfigBuilder extends BaseBuilder {
     }
   }
 
+    /**
+     * 解析typeAliases 标签
+     *
+     * 型别名是为 Java 类型设置一个短的名字。
+     * 它只和 XML 配置有关，存在的意义仅在于用
+     * 来减少类完全限定名的冗余。
+     * @param parent
+     */
   private void typeAliasesElement(XNode parent) {
     if (parent != null) {
+        //获取子标签并循环
       for (XNode child : parent.getChildren()) {
+          //判断当前子标签是否为package
         if ("package".equals(child.getName())) {
+            //注册到全局配置里面
           String typeAliasPackage = child.getStringAttribute("name");
           configuration.getTypeAliasRegistry().registerAliases(typeAliasPackage);
         } else {
+            //如果是其他 则根据配置获取并注册到全局配置中
           String alias = child.getStringAttribute("alias");
           String type = child.getStringAttribute("type");
           try {
@@ -175,18 +211,43 @@ public class XMLConfigBuilder extends BaseBuilder {
     }
   }
 
+    /**
+     * 解析plugin 标签
+     *
+     * MyBatis 允许你在已映射语句执行过程中的某一点进行拦截调用。
+     * 默认情况下，MyBatis 允许使用插件来拦截的方法调用包括：
+     * Executor (update, query, flushStatements, commit, rollback, getTransaction, close, isClosed)
+     * ParameterHandler (getParameterObject, setParameters)
+     * ResultSetHandler (handleResultSets, handleOutputParameters)
+     * StatementHandler (prepare, parameterize, batch, update, query)
+     * @param parent
+     * @throws Exception
+     */
   private void pluginElement(XNode parent) throws Exception {
     if (parent != null) {
       for (XNode child : parent.getChildren()) {
         String interceptor = child.getStringAttribute("interceptor");
         Properties properties = child.getChildrenAsProperties();
+        //初始化当前插件
         Interceptor interceptorInstance = (Interceptor) resolveClass(interceptor).newInstance();
+        //将配置的properties 传入当前插件中
         interceptorInstance.setProperties(properties);
+        //加入到全局的拦截器中
         configuration.addInterceptor(interceptorInstance);
       }
     }
   }
 
+    /**
+     * MyBatis 每次创建结果对象的新实例时，
+     * 它都会使用一个对象工厂（ObjectFactory）实例来完成。
+     * 默认的对象工厂需要做的仅仅是实例化目标类，
+     * 要么通过默认构造方法，要么在参数映射存在的时候通
+     * 过参数构造方法来实例化。 如果想覆盖对象工厂的默认行为，
+     * 则可以通过创建自己的对象工厂来实现。
+     * @param context
+     * @throws Exception
+     */
   private void objectFactoryElement(XNode context) throws Exception {
     if (context != null) {
       String type = context.getStringAttribute("type");
@@ -200,6 +261,7 @@ public class XMLConfigBuilder extends BaseBuilder {
   private void objectWrapperFactoryElement(XNode context) throws Exception {
     if (context != null) {
       String type = context.getStringAttribute("type");
+      //实例化
       ObjectWrapperFactory factory = (ObjectWrapperFactory) resolveClass(type).newInstance();
       configuration.setObjectWrapperFactory(factory);
     }
@@ -213,6 +275,15 @@ public class XMLConfigBuilder extends BaseBuilder {
     }
   }
 
+    /**
+     * 解析properties标签
+     *
+     * 这些属性都是可外部配置且可动态替换的，
+     * 既可以在典型的 Java 属性文件中配置，
+     * 亦可通过 properties 元素的子元素来传递。
+     * @param context
+     * @throws Exception
+     */
   private void propertiesElement(XNode context) throws Exception {
     if (context != null) {
       Properties defaults = context.getChildrenAsProperties();
@@ -361,6 +432,7 @@ public class XMLConfigBuilder extends BaseBuilder {
       for (XNode child : parent.getChildren()) {
         if ("package".equals(child.getName())) {
           String mapperPackage = child.getStringAttribute("name");
+          //添加到映射中
           configuration.addMappers(mapperPackage);
         } else {
           String resource = child.getStringAttribute("resource");
